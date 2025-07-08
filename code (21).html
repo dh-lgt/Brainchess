@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Modern Multiplayer Chess</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Lato&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --board-bg: #3c2a4c; --text-color: #fff; --gold-color: #ffc700;
+            --highlight-green: rgba(30, 255, 130, 0.5); --highlight-yellow: rgba(255, 235, 59, 0.5);
+            --dark-ui: #2a1d3a;
+        }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background: radial-gradient(ellipse at center, #4d326c, #21152f);
+            color: var(--text-color); font-family: 'Lato', sans-serif;
+        }
+        .screen {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .hidden { opacity: 0; pointer-events: none; }
+        
+        #entranceScreen .entrance-title { font-family: 'Cinzel', serif; font-size: 3em; color: var(--gold-color); text-shadow: 0 0 15px var(--gold-color); }
+        #entranceScreen .menu-button { font-family: 'Cinzel', serif; margin-top: 30px; }
+        #homeScreen h1 { font-family: 'Cinzel', serif; font-size: 3em; text-shadow: 2px 2px 10px #000; }
+        .menu-button {
+            background-color: var(--gold-color); color: #333; border: none; border-radius: 10px; padding: 15px 40px;
+            font-size: 1.5em; font-weight: bold; margin: 10px; cursor: pointer; transition: transform 0.2s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 80%; max-width: 300px;
+        }
+        .menu-button:hover { transform: scale(1.05); }
+        
+        #mainGame { justify-content: flex-start; padding-top: 20px; box-sizing: border-box; }
+        .game-ui-icon {
+            position: absolute; top: 15px; font-size: 2em; cursor: pointer; background: rgba(0,0,0,0.2);
+            border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center;
+            align-items: center; user-select: none;
+        }
+        #backBtn { left: 15px; }
+        #chatToggleBtn { right: 15px; }
+        
+        #chat-panel {
+            position: fixed; top: 0; right: 0; width: 300px; height: 100%; background-color: var(--dark-ui);
+            box-shadow: -5px 0 20px rgba(0,0,0,0.5); display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform 0.4s ease-in-out; z-index: 20;
+        }
+        #chat-panel.visible { transform: translateX(0); }
+        #chat-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; font-size: 1.2em; background-color: rgba(0,0,0,0.2); }
+        #closeChatBtn { font-size: 1.5em; font-weight: bold; cursor: pointer; padding: 0 5px; }
+        #closeChatBtn:hover { color: var(--gold-color); }
+        #chat-messages { flex-grow: 1; padding: 10px; overflow-y: auto; display:flex; flex-direction: column-reverse; }
+        .message { padding: 8px 12px; border-radius: 15px; margin-bottom: 8px; max-width: 80%; word-wrap: break-word; }
+        .message.self { background-color: var(--gold-color); color: #333; align-self: flex-end; border-bottom-right-radius: 3px; }
+        .message.opponent { background-color: #4a385f; align-self: flex-start; border-bottom-left-radius: 3px; }
+        #chat-form { display: flex; padding: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+        #chat-input { flex-grow: 1; border: 1px solid #555; background: #3a2d4a; color: white; border-radius: 20px; padding: 10px; margin-right: 10px; }
+        #chat-form button { background: var(--gold-color); border-radius: 50%; border: none; width: 40px; height: 40px; cursor: pointer; font-size: 1.5em; }
+
+        #board-container { position: relative; padding: 8px; background: linear-gradient(145deg, #e6b32f, #ffd700); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #myBoard { width: 88vw; height: 88vw; max-width: 450px; max-height: 450px; }
+        .white-1e1d7 { background-color: #F0D9B5; } .black-3c85d { background-color: #B58863; }
+        #highlight-layer { position: absolute; top: 8px; left: 8px; width: calc(100% - 16px); height: calc(100% - 16px); pointer-events: none; }
+    </style>
+</head>
+<body>
+    <!-- HTML is unchanged from the previous version -->
+    <div id="entranceScreen" class="screen"><div class="entrance-title">Welcome</div><button id="enterGameBtn" class="menu-button">PLAY</button></div>
+    <div id="homeScreen" class="screen hidden"><h1>Modern Chess</h1><button id="singlePlayerBtn" class="menu-button">Single Player</button><button id="onlineBtn" class="menu-button">Play Online</button><button id="friendsBtn" class="menu-button">Play with Friend</button></div>
+    <div id="searchingScreen" class="screen hidden"><div class="spinner"></div><h2>Searching for opponent...</h2><button id="cancelSearchBtn" class="menu-button" style="background-color:#c0392b; color:white; margin-top:20px;">Cancel</button></div>
+    <div id="gameSetupModal" class="screen hidden"><div class="modal-content"><h2>Play with Friend</h2><button id="createGameBtn" class="menu-button">Create New Game</button><div id="gameCreatedInfo" class="hidden" style="margin-top: 10px;"><h3>Share this Game ID:</h3><div id="gameIdDisplay" title="Click to copy"></div></div><hr style="margin: 20px 0; border-color: #666;"><h3>Or Join a Game</h3><input type="text" id="joinGameId" placeholder="Enter Game ID"><button id="joinGameBtn" class="menu-button" style="font-size:1.2em; padding: 10px 30px;">Join Game</button><button id="backToMenuBtn" class="menu-button" style="background-color:#777; font-size:1.2em; padding: 10px 30px;">Back to Menu</button></div></div>
+    <div id="mainGame" class="screen hidden"><div id="backBtn" class="game-ui-icon">🔙</div><div id="chatToggleBtn" class="game-ui-icon hidden">💬</div><div id="player-profiles"><div class="player-card"><img id="player1-img"><span id="player1-name" class="player-name"></span></div><span id="vs-text">VS</span><div class="player-card"><img id="player2-img"><span id="player2-name" class="player-name"></span></div></div><div id="board-container"><div id="myBoard"></div><div id="highlight-layer"></div></div><p id="game-status"></p><div id="chat-panel"><div id="chat-header"><span>Game Chat</span><span id="closeChatBtn">&times;</span></div><div id="chat-messages"></div><form id="chat-form"><input type="text" id="chat-input" placeholder="Message..." autocomplete="off"><button type="submit">➢</button></form></div></div>
+
+    <!-- JavaScript Libraries -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.1/firebase-database.js"></script>
+    
+    <script>
+    const AVATAR_YOU = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwMCI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYySDEydi0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==';
+    const AVATAR_OPPONENT = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzAwMCI+PHBhdGggZD0iTTE5IDhoLTJWMmgtNnY2SDZWNkg0djEwaDE1di0ySDE3VjhoLTJ6TTIgMGMtMS4xIDAtMiAuOS0yIDJ2MTRjMCAxLjEuOSAyIDIgMmgxNGwxIDFoMXYtNGgtMnYySDJWNGgxMHYtMkg0VjJjMC0xLjEtLjktMi0yLTJ6Ii8+PC9zdmc+';
+    const pieceTheme = (piece) => `https://lichess1.org/assets/piece/merida/${piece}.svg`;
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkpQH4zwYQVAWaF6WyIZ27a-E-5M66JGM", authDomain: "chesse-553e0.firebaseapp.com",
+        databaseURL: "https://chesse-553e0-default-rtdb.firebaseio.com", projectId: "chesse-553e0",
+        storageBucket: "chesse-553e0.appspot.com", messagingSenderId: "691809830740",
+        appId: "1:691809830740:web:23e268f42dbd254e7eaac1"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    let board = null, game = new Chess(), gameMode = null;
+    let playerColor = null, gameRef = null, queueRef = null;
+    
+    function showScreen(screenId) {
+        $('.screen').addClass('hidden');
+        $('#' + screenId).removeClass('hidden');
+    }
+    
+    // --- START OF FIXED CODE ---
+    function onDrop(source, target) {
+        clearHighlights('possible');
+        let move = game.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+        updateLastMoveHighlight(move.from, move.to);
+        updateStatus();
+        if (gameMode === 'single') {
+            window.setTimeout(makeBestMove, 250);
+        } else if (gameRef) { // This is the key condition
+            gameRef.update({ fen: game.fen() });
+        }
+    }
+
+    function startGame(mode, config = {}) {
+        gameMode = mode;
+        showScreen('mainGame');
+        playerColor = config.color || 'white';
+        
+        // ** THE BUG FIX IS HERE **
+        // We now explicitly set gameRef based on the config.
+        // If config.gameRef exists, it's a multiplayer game. If not, it's single player.
+        gameRef = config.gameRef || null; 
+
+        if (gameRef) { // Is this a multiplayer game?
+            $('#chatToggleBtn').removeClass('hidden');
+            listenToGameUpdates();
+        } else { // This must be a single player game
+            $('#chatToggleBtn').addClass('hidden');
+        }
+
+        // Setup player profiles
+        $('#player1-name').text(playerColor === 'black' ? 'Opponent' : 'You');
+        $('#player2-name').text(gameMode === 'single' ? 'Computer' : (playerColor === 'black' ? 'You' : 'Opponent'));
+        $('#player1-img').attr('src', playerColor === 'black' ? AVATAR_OPPONENT : AVATAR_YOU);
+        $('#player2-img').attr('src', playerColor === 'black' ? AVATAR_YOU : AVATAR_OPPONENT);
+        
+        if (board) board.destroy();
+        board = Chessboard('myBoard', { draggable: true, position: 'start', pieceTheme: pieceTheme, onDragStart: onDragStart, onDrop: onDrop, onDragClear: () => clearHighlights('possible'), orientation: playerColor });
+        $(window).off('resize').on('resize', () => board && board.resize());
+        
+        game.reset();
+        clearHighlights();
+        if (config.fen) {
+            game.load(config.fen);
+            board.position(config.fen);
+        }
+        updateStatus();
+    }
+    // --- END OF FIXED CODE ---
+
+    function cleanUp() {
+        if (gameRef) { gameRef.off(); gameRef.onDisconnect().cancel(); gameRef.remove(); gameRef = null; }
+        if (queueRef) { queueRef.onDisconnect().cancel(); queueRef.remove(); queueRef = null; }
+        if (board) { board.destroy(); board = null; }
+        $('#chat-panel').removeClass('visible');
+        showScreen('homeScreen');
+    }
+
+    $('#enterGameBtn').on('click', () => showScreen('homeScreen'));
+    $('#singlePlayerBtn').on('click', () => startGame('single'));
+    $('#friendsBtn').on('click', () => showScreen('gameSetupModal'));
+    $('#onlineBtn').on('click', findOpponent);
+    $('#backBtn, #cancelSearchBtn').on('click', cleanUp);
+    
+    $('#chatToggleBtn, #closeChatBtn').on('click', () => {
+        $('#chat-panel').toggleClass('visible');
+    });
+
+    $('#chat-form').on('submit', function(e) {
+        e.preventDefault(); const messageText = $('#chat-input').val();
+        if (messageText.trim() === '' || !gameRef) return;
+        gameRef.child('chat').push({ sender: playerColor, text: messageText });
+        $('#chat-input').val('');
+    });
+
+    // --- FULL FUNCTION IMPLEMENTATIONS (to ensure everything is present) ---
+    function addHighlight(square, type) { const squareEl = $(`#myBoard .square-${square}`); if (!squareEl.length) return; const squareSize = squareEl.width(); const col = 'abcdefgh'.indexOf(square[0]); const row = 8 - parseInt(square[1], 10); const highlightClass = type === 'last' ? 'highlight-last-move' : 'highlight-possible-move'; let $highlight = $('<div>', { class: 'highlight-square ' + highlightClass, style: `width:${squareSize}px; height:${squareSize}px; top:${row * squareSize}px; left:${col * squareSize}px;` }); $('#highlight-layer').append($highlight); }
+    function clearHighlights(type = 'all') { $('#highlight-layer > .highlight-' + (type === 'all' ? 'square' : type + '-move')).remove(); }
+    function updateLastMoveHighlight(from, to) { clearHighlights('last'); addHighlight(from, 'last'); addHighlight(to, 'last'); }
+    function onDragStart(source, piece) { if (game.game_over()) return false; if ((gameMode === 'single' && game.turn() !== 'w') || (gameMode !== 'single' && ((game.turn() === 'w' && playerColor !== 'white') || (game.turn() === 'b' && playerColor !== 'black')))) return false; let moves = game.moves({ square: source, verbose: true }); if (moves.length === 0) return false; moves.forEach(move => addHighlight(move.to, 'possible')); return true; }
+    function updateStatus() { let status = ''; const turnColor = game.turn() === 'w' ? 'White' : 'Black'; const playerTurn = (playerColor === 'white' && turnColor === 'White') || (playerColor === 'black' && turnColor === 'Black'); if (game.in_checkmate()) status = `Checkmate! ${playerTurn ? 'You Lose.' : 'You Win!'}`; else if (game.in_draw()) status = 'Draw!'; else { status = playerTurn || gameMode === 'single' ? "Your Turn" : "Opponent's Turn"; if (game.in_check()) status += ` (Check!)`; } $('#game-status').html(status); }
+    function makeBestMove() { let possibleMoves = game.moves(); if (possibleMoves.length === 0) return; let randomIdx = Math.floor(Math.random() * possibleMoves.length); let move = game.move(possibleMoves[randomIdx]); board.position(game.fen()); updateLastMoveHighlight(move.from, move.to); updateStatus(); }
+    function listenToGameUpdates() {
+        gameRef.on('value', (snapshot) => {
+            const data = snapshot.val(); if (!data || !data.fen || data.fen === game.fen()) return;
+            game.load(data.fen); board.position(game.fen()); updateStatus();
+            const history = game.history({ verbose: true }); const lastMove = history[history.length - 1]; if (lastMove) updateLastMoveHighlight(lastMove.from, lastMove.to);
+        });
+        gameRef.child('chat').limitToLast(50).on('child_added', (snapshot) => {
+            const msg = snapshot.val(); const messageClass = msg.sender === playerColor ? 'self' : 'opponent';
+            const $messageDiv = $('<div>').addClass('message').addClass(messageClass).text(msg.text); $('#chat-messages').prepend($messageDiv);
+        });
+        gameRef.onDisconnect().remove();
+    }
+    function findOpponent() {
+        showScreen('searchingScreen'); queueRef = database.ref('queue');
+        queueRef.transaction((queue) => {
+            if (queue === null) { const gameId = 'online_' + Math.random().toString(36).substr(2, 9); return { gameId: gameId, player: 'player1' }; }
+            if (queue.player === 'player1') { queue.player = 'player2'; return queue; } return;
+        }).then(result => {
+            if (!result.committed) return; const data = result.snapshot.val(); const gameId = data.gameId;
+            let currentRef;
+            if (data.player === 'player1') {
+                currentRef = database.ref('games/' + gameId); currentRef.set({ fen: 'start', status: 'waiting' }); queueRef.onDisconnect().remove();
+                currentRef.on('value', function onValue(snap) { if (snap.val() && snap.val().status === 'connected') { currentRef.off('value', onValue); queueRef.onDisconnect().cancel(); startGame('online', { color: 'white', gameRef: currentRef }); } });
+            } else {
+                currentRef = database.ref('games/' + gameId); currentRef.update({ status: 'connected' }); startGame('online', { color: 'black', gameRef: currentRef });
+            }
+        });
+    }
+    $('#createGameBtn').on('click', function() {
+        const gameId = 'friend_' + Math.random().toString(36).substr(2, 5);
+        const currentRef = database.ref('games/' + gameId); currentRef.set({ fen: 'start', status: 'waiting' });
+        $('#gameIdDisplay').text(gameId).on('click', () => navigator.clipboard.writeText(gameId).then(() => alert('Copied!')));
+        $('#gameCreatedInfo').removeClass('hidden');
+        currentRef.on('value', function onValue(snapshot) { if (snapshot.val() && snapshot.val().status === 'connected') { currentRef.off('value', onValue); startGame('friends', { color: 'white', gameRef: currentRef }); } });
+    });
+    $('#joinGameBtn').on('click', function() {
+        const gameId = $('#joinGameId').val(); if (!gameId) return alert('Enter Game ID.');
+        const currentRef = database.ref('games/' + gameId);
+        currentRef.once('value', (snapshot) => {
+            if (snapshot.exists() && snapshot.val().status === 'waiting') {
+                currentRef.update({ status: 'connected' }); startGame('friends', { color: 'black', fen: snapshot.val().fen, gameRef: currentRef });
+            } else { alert('Game not found or already started!'); }
+        });
+    });
+    
+    // Initialize
+    showScreen('entranceScreen');
+    </script>
+</body>
+</html>
